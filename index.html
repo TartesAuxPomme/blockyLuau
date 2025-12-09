@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Blockly → Luau (Roblox) — Éditeur</title>
+
+  <!-- Blockly (CDN) -->
+  <script src="https://unpkg.com/blockly/blockly.min.js"></script>
+  <script src="https://unpkg.com/blockly/lua.min.js"></script>
+
+  <style>
+    :root {
+      --accent: #3b82f6;
+      --bg: #0f172a;
+      --panel: #0b1220;
+      --muted: #94a3b8;
+    }
+    html,body{height:100%;margin:0;font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial}
+    body{display:flex;flex-direction:column;background:linear-gradient(180deg,#071029 0%, #071827 100%);color:#e6eef6}
+    header{padding:12px 18px;display:flex;align-items:center;gap:12px}
+    header h1{font-size:18px;margin:0}
+    .container{display:flex;gap:12px;padding:12px;flex:1;min-height:0}
+    /* Left: Blockly */
+    .editor{flex:1;display:flex;flex-direction:column;background:var(--panel);border-radius:8px;padding:10px;box-shadow:0 6px 18px rgba(2,6,23,0.6)}
+    #blocklyDiv{flex:1;border-radius:6px;overflow:hidden;background:white}
+    /* Right: controls + output */
+    .side{width:420px;display:flex;flex-direction:column;gap:12px}
+    .card{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));padding:12px;border-radius:8px;box-shadow:0 6px 18px rgba(2,6,23,0.4)}
+    .controls{display:flex;gap:8px;flex-wrap:wrap}
+    button{background:var(--accent);color:white;padding:8px 10px;border:none;border-radius:6px;cursor:pointer;font-weight:600}
+    button.ghost{background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--muted)}
+    pre#output{height:380px;overflow:auto;background:#021023;padding:12px;border-radius:6px;color:#cfe8ff;margin:0;white-space:pre-wrap}
+    label.small{font-size:12px;color:var(--muted);display:block;margin-bottom:6px}
+    .hint{font-size:13px;color:var(--muted)}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Blockly → Luau (Roblox) — Éditeur</h1>
+    <div class="hint">Prototype prêt : génère du Luau copiable vers Roblox Studio</div>
+  </header>
+
+  <div class="container">
+    <div class="editor card">
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+        <button id="btnGenerate">Générer le Luau</button>
+        <button id="btnClear" class="ghost">Vider</button>
+        <button id="btnSample" class="ghost">Charger exemple</button>
+        <div style="margin-left:auto;color:var(--muted);font-size:13px">Workspace</div>
+      </div>
+
+      <!-- Zone Blockly -->
+      <div id="blocklyDiv" style="height:640px; width:100%;"></div>
+
+      <!-- Toolbox (invisible xml) -->
+      <xml id="toolbox" style="display: none">
+        <category name="Contrôle" colour="#5C81A6">
+          <block type="controls_repeat_ext"></block>
+          <block type="controls_if"></block>
+          <block type="controls_for"></block>
+        </category>
+
+        <category name="Math" colour="#5CA65C">
+          <block type="math_number"></block>
+          <block type="math_arithmetic"></block>
+        </category>
+
+        <category name="Texte" colour="#5C8FA6">
+          <block type="text"></block>
+          <block type="text_print"></block>
+        </category>
+
+        <category name="Roblox (Luau)" colour="#D46B00">
+          <block type="roblox_print"></block>
+          <block type="roblox_wait"></block>
+          <block type="roblox_instance_new"></block>
+          <block type="roblox_set_property"></block>
+          <block type="roblox_find_service"></block>
+          <block type="roblox_fire_event"></block>
+        </category>
+
+        <category name="Variables" colour="#A65C9E">
+          <block type="variables_get"></block>
+          <block type="variables_set"></block>
+        </category>
+      </xml>
+    </div>
+
+    <div class="side">
+      <div class="card">
+        <label class="small">Contrôles</label>
+        <div class="controls">
+          <button id="btnCopy">Copier dans le presse-papier</button>
+          <button id="btnDownload" class="ghost">Télécharger .lua</button>
+          <button id="btnFormat" class="ghost">Reformater (basique)</button>
+        </div>
+        <p class="hint" style="margin-top:8px">Astuce : sélectionne des blocs puis clique sur "Générer" pour actualiser le code.</p>
+      </div>
+
+      <div class="card" style="flex:1;display:flex;flex-direction:column">
+        <label class="small">Code Luau généré</label>
+        <pre id="output">-- Appuie sur "Générer le Luau" pour voir le code ici.</pre>
+      </div>
+
+      <div class="card">
+        <label class="small">Importer / Exporter le workspace</label>
+        <div style="display:flex;gap:8px">
+          <button id="btnExportXml" class="ghost">Exporter XML</button>
+          <button id="btnImportXml" class="ghost">Importer XML</button>
+        </div>
+        <input id="xmlInput" placeholder="Coller XML ici puis Importer" style="margin-top:8px;padding:8px;border-radius:6px;background:#071425;border:none;color:#cfe8ff;width:100%;" />
+      </div>
+
+      <div class="card">
+        <label class="small">Notes rapides</label>
+        <ul style="margin:6px 0 0 18px;color:var(--muted);padding:0">
+          <li>Copie le code et colle dans un Script/LocalScript dans Roblox Studio.</li>
+          <li>Le générateur est simple — adapte les blocs si tu veux des API Roblox plus complexes.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Blocs personnalisés + générateurs Luau -->
+  <script>
+    // --------------- Définition des blocs ---------------
+    Blockly.defineBlocksWithJsonArray([
+      {
+        "type": "roblox_print",
+        "message0": "print %1",
+        "args0": [{"type":"input_value","name":"TXT"}],
+        "previousStatement": null,
+        "nextStatement": null,
+        "colour": 230,
+        "tooltip": "Print en Luau",
+        "helpUrl": ""
+      },
+      {
+        "type": "roblox_wait",
+        "message0": "wait %1 secondes",
+        "args0": [{"type":"input_value","name":"TIME","check":"Number"}],
+        "previousStatement": null,
+        "nextStatement": null,
+        "colour": 230
+      },
+      {
+        "type": "roblox_instance_new",
+        "message0": "Instance.new %1 nom %2 parent %3",
+        "args0": [
+          {"type":"field_input","name":"TYPE","text":"Part"},
+          {"type":"field_input","name":"NAME","text":"MyPart"},
+          {"type":"input_value","name":"PARENT"}
+        ],
+        "output": null,
+        "colour": 160
+      },
+      {
+        "type": "roblox_set_property",
+        "message0": "définir %1.%2 = %3",
+        "args0": [
+          {"type":"input_value","name":"OBJ"},
+          {"type":"field_input","name":"PROP","text":"Position"},
+          {"type":"input_value","name":"VAL"}
+        ],
+        "previousStatement": null,
+        "nextStatement": null,
+        "colour": 160
+      },
+      {
+        "type": "roblox_find_service",
+        "message0": "game:GetService('%1')",
+        "args0": [{"type":"field_input","name":"SERVICE","text":"Workspace"}],
+        "output": null,
+        "colour": 20
+      },
+      {
+        "type": "roblox_fire_event",
+        "message0": "RemoteEvent %1:FireServer %2",
+        "args0": [
+          {"type":"input_value","name":"EVENT"},
+          {"type":"input_value","name":"DATA"}
+        ],
+        "previousStatement": null,
+        "nextStatement": null,
+        "colour": 0
+      }
+    ]);
+
+    // --------------- Générateurs Luau ---------------
+    Blockly.Lua['roblox_print'] = function(block) {
+      var txt = Blockly.Lua.valueToCode(block, 'TXT', Blockly.Lua.ORDER_NONE) || '""';
+      return 'print(' + txt + ')\n';
+    };
+
+    Blockly.Lua['roblox_wait'] = function(block) {
+      var t = Blockly.Lua.valueToCode(block, 'TIME', Blockly.Lua.ORDER_NONE) || '1';
+      // Roblox recommande task.wait() mais wait() marche aussi ; on utilise task.wait
+      return 'task.wait(' + t + ')\n';
+    };
+
+    Blockly.Lua['roblox_instance_new'] = function(block) {
+      var typeName = block.getFieldValue('TYPE') || 'Part';
+      var name = block.getFieldValue('NAME') || 'NewInstance';
+      var parent = Blockly.Lua.valueToCode(block, 'PARENT', Blockly.Lua.ORDER_NONE) || 'workspace';
+      var varName = Blockly.Lua.variableDB_.getDistinctName('inst', Blockly.Variables.NAME_TYPE);
+      var code = varName + ' = Instance.new("' + typeName.replace(/"/g, '\\"') + '")\n';
+      code += varName + '.Name = "' + name.replace(/"/g, '\\"') + '"\n';
+      code += varName + '.Parent = ' + parent + '\n';
+      return [varName, Blockly.Lua.ORDER_ATOMIC];
+    };
+
+    Blockly.Lua['roblox_set_property'] = function(block) {
+      var obj = Blockly.Lua.valueToCode(block, 'OBJ', Blockly.Lua.ORDER_NONE) || 'nil';
+      var prop = block.getFieldValue('PROP') || 'Property';
+      var val = Blockly.Lua.valueToCode(block, 'VAL', Blockly.Lua.ORDER_NONE) || 'nil';
+      return obj + '.' + prop + ' = ' + val + '\n';
+    };
+
+    Blockly.Lua['roblox_find_service'] = function(block) {
+      var svc = block.getFieldValue('SERVICE') || 'Workspace';
+      var code = 'game:GetService("' + svc.replace(/"/g, '\\"') + '")';
+      return [code, Blockly.Lua.ORDER_ATOMIC];
+    };
+
+    Blockly.Lua['roblox_fire_event'] = function(block) {
+      var ev = Blockly.Lua.valueToCode(block, 'EVENT', Blockly.Lua.ORDER_NONE) || 'nil';
+      var data = Blockly.Lua.valueToCode(block, 'DATA', Blockly.Lua.ORDER_NONE) || '';
+      return ev + ':FireServer(' + (data ? data : '') + ')\n';
+    };
+
+    // --------------- Initialisation du workspace ---------------
+    const workspace = Blockly.inject('blocklyDiv', {
+      toolbox: document.getElementById('toolbox'),
+      scrollbars: true,
+      trashcan: true,
+      renderer: 'thrasos'
+    });
+
+    // Charger un exemple simple
+    const sampleXml = `
+      <xml xmlns="https://developers.google.com/blockly/xml">
+        <block type="roblox_print" x="20" y="20">
+          <value name="TXT">
+            <block type="text">
+              <field name="TEXT">Hello from Blockly → Luau!</field>
+            </block>
+          </value>
+          <next>
+            <block type="roblox_wait">
+              <value name="TIME">
+                <block type="math_number"><field name="NUM">0.6</field></block>
+              </value>
+              <next>
+                <block type="roblox_print">
+                  <value name="TXT">
+                    <block type="text"><field name="TEXT">Après wait()</field></block>
+                  </value>
+                </block>
+              </next>
+            </block>
+          </next>
+        </block>
+      </xml>
+    `;
+
+    // --------------- Boutons & fonctionnalités ---------------
+    const outputEl = document.getElementById('output');
+
+    function generateLuau() {
+      // Génère avec le générateur Lua existant
+      let code = Blockly.Lua.workspaceToCode(workspace) || '-- (vide)';
+      // Post-traitements basiques pour Luau (exemples)
+      // Remplacer certains patterns Lua par équivalents Luau si besoin
+      // (ici on garde simple)
+      outputEl.innerText = code;
+      return code;
+    }
+
+    document.getElementById('btnGenerate').addEventListener('click', () => {
+      generateLuau();
+    });
+
+    document.getElementById('btnClear').addEventListener('click', () => {
+      workspace.clear();
+      outputEl.innerText = '-- Workspace vidé';
+    });
+
+    document.getElementById('btnSample').addEventListener('click', () => {
+      workspace.clear();
+      const xml = Blockly.Xml.textToDom(sampleXml);
+      Blockly.Xml.domToWorkspace(xml, workspace);
+    });
+
+    // Copier dans le presse-papier
+    document.getElementById('btnCopy').addEventListener('click', async () => {
+      const code = generateLuau();
+      try {
+        await navigator.clipboard.writeText(code);
+        alert('Code copié dans le presse-papier ! → Colle dans Roblox Studio');
+      } catch (e) {
+        alert('Impossible de copier automatiquement. Sélectionne le code en bas et copie manuellement.');
+      }
+    });
+
+    // Télécharger en .lua
+    document.getElementById('btnDownload').addEventListener('click', () => {
+      const code = generateLuau();
+      const blob = new Blob([code], {type: 'text/plain;charset=utf-8'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'script.lua';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    });
+
+    // Reformater très basique (indentation simple)
+    document.getElementById('btnFormat').addEventListener('click', () => {
+      const raw = outputEl.innerText;
+      const lines = raw.split('\n');
+      let indent = 0;
+      const out = lines.map(line => {
+        const trimmed = line.trim();
+        if (trimmed.match(/^end\b/) || trimmed.match(/^\)/) || trimmed.match(/^else\b/)) indent = Math.max(0, indent-1);
+        const pref = '  '.repeat(indent);
+        if (trimmed.match(/\bthen\b$|do$|\{$/)) {
+          const r = pref + trimmed;
+          indent++;
+          return r;
+        }
+        return pref + trimmed;
+      }).join('\n');
+      outputEl.innerText = out;
+    });
+
+    // Exporter XML du workspace
+    document.getElementById('btnExportXml').addEventListener('click', () => {
+      const xmlDom = Blockly.Xml.workspaceToDom(workspace);
+      const xmlText = Blockly.Xml.domToPrettyText(xmlDom);
+      document.getElementById('xmlInput').value = xmlText;
+      alert('XML exporté dans le champ ci-dessous. Enregistre-le si tu veux le réutiliser.');
+    });
+
+    // Importer XML
+    document.getElementById('btnImportXml').addEventListener('click', () => {
+      const txt = document.getElementById('xmlInput').value;
+      if (!txt) { alert('Colle ici le XML exporté puis clique Importer.'); return; }
+      try {
+        const dom = Blockly.Xml.textToDom(txt);
+        workspace.clear();
+        Blockly.Xml.domToWorkspace(dom, workspace);
+        alert('Workspace importé !');
+      } catch (e) {
+        alert('XML invalide — vérifie le contenu.');
+      }
+    });
+
+    // Charger l'exemple automatiquement au démarrage
+    window.addEventListener('load', () => {
+      const xml = Blockly.Xml.textToDom(sampleXml);
+      Blockly.Xml.domToWorkspace(xml, workspace);
+      generateLuau();
+    });
+
+  </script>
+</body>
+</html>
